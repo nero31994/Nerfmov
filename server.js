@@ -3,16 +3,16 @@ import puppeteer from "puppeteer";
 
 const app = express();
 
+// ✅ Health check
 app.get("/", (req, res) => {
-  res.send("VixSrc Headless Scraper Running 🚀");
+  res.send("VixSrc Headless Scraper PRO Running 🚀");
 });
 
+// ✅ Extract route
 app.get("/extract", async (req, res) => {
   const { url } = req.query;
 
-  if (!url) {
-    return res.json({ streams: [] });
-  }
+  if (!url) return res.json({ streams: [] });
 
   let browser;
 
@@ -32,56 +32,91 @@ app.get("/extract", async (req, res) => {
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
     );
 
+    let streamUrl = null;
+
+    // 🔥 INTERCEPT REQUESTS
+    page.on("request", (req) => {
+      const reqUrl = req.url();
+      if (reqUrl.includes(".m3u8")) {
+        streamUrl = reqUrl;
+      }
+    });
+
+    // 🔥 INTERCEPT RESPONSES (STRONGER)
+    page.on("response", (res) => {
+      const resUrl = res.url();
+      if (resUrl.includes(".m3u8")) {
+        streamUrl = resUrl;
+      }
+    });
+
+    // 🚀 OPEN PAGE
     await page.goto(url, {
       waitUntil: "domcontentloaded",
       timeout: 60000
     });
 
-    // 🔥 wait for scripts to load
-    await page.waitForTimeout(3000);
+    // ⏳ WAIT INITIAL LOAD
+    await page.waitForTimeout(4000);
 
-    const result = await page.evaluate(() => {
-      const html = document.documentElement.innerHTML;
-
-      const token = html.match(/token['"]:\s*['"](.*?)['"]/)?.[1];
-      const expires = html.match(/expires['"]:\s*['"](.*?)['"]/)?.[1];
-
-      const file =
-        html.match(/file:\s*['"](.*?)['"]/)?.[1] ||
-        html.match(/url:\s*['"](.*?)['"]/)?.[1] ||
-        html.match(/source:\s*['"](.*?)['"]/)?.[1];
-
-      return { token, expires, file };
-    });
-
-    if (!result.file) {
-      return res.json({ streams: [] });
+    // 🔥 HANDLE IFRAME (VERY IMPORTANT)
+    const frames = page.frames();
+    for (const frame of frames) {
+      try {
+        const frameUrl = frame.url();
+        if (frameUrl.includes("http")) {
+          // try to trigger activity inside iframe
+          await frame.evaluate(() => {
+            const video = document.querySelector("video");
+            if (video) {
+              video.muted = true;
+              video.play().catch(() => {});
+            }
+          });
+        }
+      } catch (e) {}
     }
 
-    let streamUrl = result.file;
+    // 🔥 AUTO INTERACTION (simulate user)
+    await page.mouse.click(300, 300);
 
-    if (result.token && result.expires) {
-      streamUrl += `&token=${result.token}&expires=${result.expires}`;
+    await page.evaluate(() => {
+      const video = document.querySelector("video");
+      if (video) {
+        video.muted = true;
+        video.play().catch(() => {});
+      }
+    });
+
+    // ⏳ WAIT FOR STREAM REQUESTS
+    await page.waitForTimeout(8000);
+
+    await browser.close();
+
+    if (!streamUrl) {
+      return res.json({ streams: [] });
     }
 
     return res.json({
       streams: [
         {
-          name: "VixSrc Headless",
-          title: "Auto Stream",
+          name: "VixSrc Headless PRO",
+          title: "Auto Detected Stream",
           url: streamUrl
         }
       ]
     });
 
   } catch (err) {
-    console.error(err);
-    return res.json({ streams: [] });
-  } finally {
+    console.error("Scraper error:", err);
+
     if (browser) await browser.close();
+
+    return res.json({ streams: [] });
   }
 });
 
+// ✅ Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

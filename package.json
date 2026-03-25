@@ -1,0 +1,14 @@
+{
+  "name": "vixsrc-scraper",
+  "version": "1.0.0",
+  "description": "Headless scraper for Stremio addon",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "puppeteer": "^22.0.0"
+  }
+}

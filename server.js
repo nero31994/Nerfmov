@@ -5,7 +5,7 @@ const app = express();
 
 // ✅ Health check
 app.get("/", (req, res) => {
-  res.send("VixSrc Headless Scraper PRO Running 🚀");
+  res.send("VixSrc Headless Scraper PRO+ Running 🚀");
 });
 
 // ✅ Extract route
@@ -34,20 +34,34 @@ app.get("/extract", async (req, res) => {
 
     let streamUrl = null;
 
-    // 🔥 INTERCEPT REQUESTS
-    page.on("request", (req) => {
-      const reqUrl = req.url();
-      if (reqUrl.includes(".m3u8")) {
-        streamUrl = reqUrl;
-      }
-    });
+    // 💣 STRONG: INTERCEPT RESPONSES (MAIN LOGIC)
+    page.on("response", async (response) => {
+      try {
+        const resUrl = response.url();
 
-    // 🔥 INTERCEPT RESPONSES (STRONGER)
-    page.on("response", (res) => {
-      const resUrl = res.url();
-      if (resUrl.includes(".m3u8")) {
-        streamUrl = resUrl;
-      }
+        // Direct .m3u8
+        if (resUrl.includes(".m3u8")) {
+          streamUrl = resUrl;
+          return;
+        }
+
+        // 🔥 Detect API responses that contain stream
+        if (
+          resUrl.includes("playlist") ||
+          resUrl.includes("source") ||
+          resUrl.includes("embed") ||
+          resUrl.includes("api")
+        ) {
+          const text = await response.text();
+
+          const match = text.match(/https?:\/\/[^"' ]+\.m3u8[^"' ]*/);
+
+          if (match) {
+            streamUrl = match[0];
+          }
+        }
+
+      } catch (e) {}
     });
 
     // 🚀 OPEN PAGE
@@ -56,28 +70,24 @@ app.get("/extract", async (req, res) => {
       timeout: 60000
     });
 
-    // ⏳ WAIT INITIAL LOAD
+    // ⏳ INITIAL WAIT
     await page.waitForTimeout(4000);
 
-    // 🔥 HANDLE IFRAME (VERY IMPORTANT)
+    // 🔥 HANDLE IFRAMES
     const frames = page.frames();
     for (const frame of frames) {
       try {
-        const frameUrl = frame.url();
-        if (frameUrl.includes("http")) {
-          // try to trigger activity inside iframe
-          await frame.evaluate(() => {
-            const video = document.querySelector("video");
-            if (video) {
-              video.muted = true;
-              video.play().catch(() => {});
-            }
-          });
-        }
+        await frame.evaluate(() => {
+          const video = document.querySelector("video");
+          if (video) {
+            video.muted = true;
+            video.play().catch(() => {});
+          }
+        });
       } catch (e) {}
     }
 
-    // 🔥 AUTO INTERACTION (simulate user)
+    // 🔥 USER INTERACTION
     await page.mouse.click(300, 300);
 
     await page.evaluate(() => {
@@ -88,8 +98,8 @@ app.get("/extract", async (req, res) => {
       }
     });
 
-    // ⏳ WAIT FOR STREAM REQUESTS
-    await page.waitForTimeout(8000);
+    // ⏳ WAIT FOR NETWORK ACTIVITY
+    await page.waitForTimeout(10000);
 
     await browser.close();
 
@@ -100,8 +110,8 @@ app.get("/extract", async (req, res) => {
     return res.json({
       streams: [
         {
-          name: "VixSrc Headless PRO",
-          title: "Auto Detected Stream",
+          name: "VixSrc PRO+",
+          title: "XHR Detected Stream",
           url: streamUrl
         }
       ]
